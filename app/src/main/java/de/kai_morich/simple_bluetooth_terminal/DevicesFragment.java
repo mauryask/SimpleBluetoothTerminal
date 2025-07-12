@@ -57,9 +57,13 @@ public class DevicesFragment extends ListFragment {
                 return view;
             }
         };
+
         requestBluetoothPermissionLauncherForRefresh = registerForActivityResult(
                 new ActivityResultContracts.RequestPermission(),
-                granted -> BluetoothUtil.onPermissionsResult(this, granted, this::refresh));
+                granted -> {
+                    //TODO: Quite interesting learning here: Passing method reference
+                    BluetoothUtil.onPermissionsResult(this, granted, this::refresh);
+                });
     }
 
     @Override
@@ -125,6 +129,8 @@ public class DevicesFragment extends ListFragment {
                 Collections.sort(listItems, BluetoothUtil::compareTo);
             }
         }
+
+
         if (bluetoothAdapter == null)
             setEmptyText("<bluetooth not supported>");
         else if (!bluetoothAdapter.isEnabled())

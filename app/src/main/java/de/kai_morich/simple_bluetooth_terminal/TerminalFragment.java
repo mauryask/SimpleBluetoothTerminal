@@ -35,7 +35,7 @@ import java.util.Arrays;
 
 public class TerminalFragment extends Fragment implements ServiceConnection, SerialListener {
 
-    private enum Connected { False, Pending, True }
+    private enum Connected {False, Pending, True}
 
     private String deviceAddress;
     private SerialService service;
@@ -57,53 +57,56 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setHasOptionsMenu(true);
-        setRetainInstance(true);
-        deviceAddress = getArguments().getString("device");
+        deviceAddress = requireArguments().getString("device");
     }
 
     @Override
     public void onDestroy() {
         if (connected != Connected.False)
             disconnect();
-        getActivity().stopService(new Intent(getActivity(), SerialService.class));
+        requireActivity().stopService(new Intent(requireActivity(), SerialService.class));
         super.onDestroy();
     }
 
     @Override
     public void onStart() {
         super.onStart();
-        if(service != null)
+        if (service != null)
             service.attach(this);
         else
-            getActivity().startService(new Intent(getActivity(), SerialService.class)); // prevents service destroy on unbind from recreated activity caused by orientation change
+            requireActivity().startService(new Intent(requireActivity(), SerialService.class)); // prevents service destroy on unbind from recreated activity caused by orientation change
     }
 
     @Override
     public void onStop() {
-        if(service != null && !getActivity().isChangingConfigurations())
+        if (service != null && !requireActivity().isChangingConfigurations())
             service.detach();
         super.onStop();
     }
 
-    @SuppressWarnings("deprecation") // onAttach(context) was added with API 23. onAttach(activity) works for all API versions
+    @SuppressWarnings("deprecation")
+    // onAttach(context) was added with API 23. onAttach(activity) works for all API versions
     @Override
     public void onAttach(@NonNull Activity activity) {
         super.onAttach(activity);
-        getActivity().bindService(new Intent(getActivity(), SerialService.class), this, Context.BIND_AUTO_CREATE);
+        requireActivity().bindService(new Intent(requireActivity(), SerialService.class), this, Context.BIND_AUTO_CREATE);
     }
 
     @Override
     public void onDetach() {
-        try { getActivity().unbindService(this); } catch(Exception ignored) {}
+        try {
+            requireActivity().unbindService(this);
+        } catch (Exception ignored) {
+        }
         super.onDetach();
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        if(initialStart && service != null) {
+        if (initialStart && service != null) {
             initialStart = false;
-            getActivity().runOnUiThread(this::connect);
+            requireActivity().runOnUiThread(this::connect);
         }
     }
 
@@ -111,9 +114,9 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     public void onServiceConnected(ComponentName name, IBinder binder) {
         service = ((SerialService.SerialBinder) binder).getService();
         service.attach(this);
-        if(initialStart && isResumed()) {
+        if (initialStart && isResumed()) {
             initialStart = false;
-            getActivity().runOnUiThread(this::connect);
+            requireActivity().runOnUiThread(this::connect);
         }
     }
 
@@ -139,7 +142,10 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         sendText.setHint(hexEnabled ? "HEX mode" : "");
 
         View sendBtn = view.findViewById(R.id.send_btn);
-        sendBtn.setOnClickListener(v -> send(sendText.getText().toString()));
+        sendBtn.setOnClickListener(v -> {
+            send(sendText.getText().toString().trim());
+            sendText.setText("");
+        });
         return view;
     }
 
@@ -168,7 +174,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
             String[] newlineNames = getResources().getStringArray(R.array.newline_names);
             String[] newlineValues = getResources().getStringArray(R.array.newline_values);
             int pos = java.util.Arrays.asList(newlineValues).indexOf(newline);
-            AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
+            AlertDialog.Builder builder = new AlertDialog.Builder(requireActivity());
             builder.setTitle("Newline");
             builder.setSingleChoiceItems(newlineNames, pos, (dialog, item1) -> {
                 newline = newlineValues[item1];
@@ -206,7 +212,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
             BluetoothDevice device = bluetoothAdapter.getRemoteDevice(deviceAddress);
             status("connecting...");
             connected = Connected.Pending;
-            SerialSocket socket = new SerialSocket(getActivity().getApplicationContext(), device);
+            SerialSocket socket = new SerialSocket(requireActivity().getApplicationContext(), device);
             service.connect(socket);
         } catch (Exception e) {
             onSerialConnectError(e);
@@ -219,14 +225,14 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     }
 
     private void send(String str) {
-        if(connected != Connected.True) {
-            Toast.makeText(getActivity(), "not connected", Toast.LENGTH_SHORT).show();
+        if (connected != Connected.True) {
+            Toast.makeText(requireActivity(), "not connected", Toast.LENGTH_SHORT).show();
             return;
         }
         try {
             String msg;
             byte[] data;
-            if(hexEnabled) {
+            if (hexEnabled) {
                 StringBuilder sb = new StringBuilder();
                 TextUtil.toHexString(sb, TextUtil.fromHexString(str));
                 TextUtil.toHexString(sb, newline.getBytes());
@@ -257,7 +263,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                     msg = msg.replace(TextUtil.newline_crlf, TextUtil.newline_lf);
                     // special handling if CR and LF come in separate fragments
                     if (pendingNewline && msg.charAt(0) == '\n') {
-                        if(spn.length() >= 2) {
+                        if (spn.length() >= 2) {
                             spn.delete(spn.length() - 2, spn.length());
                         } else {
                             Editable edt = receiveText.getEditableText();
@@ -286,13 +292,13 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     private void showNotificationSettings() {
         Intent intent = new Intent();
         intent.setAction("android.settings.APP_NOTIFICATION_SETTINGS");
-        intent.putExtra("android.provider.extra.APP_PACKAGE", getActivity().getPackageName());
+        intent.putExtra("android.provider.extra.APP_PACKAGE", requireActivity().getPackageName());
         startActivity(intent);
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        if(Arrays.equals(permissions, new String[]{Manifest.permission.POST_NOTIFICATIONS}) &&
+        if (Arrays.equals(permissions, new String[]{Manifest.permission.POST_NOTIFICATIONS}) &&
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !service.areNotificationsEnabled())
             showNotificationSettings();
     }

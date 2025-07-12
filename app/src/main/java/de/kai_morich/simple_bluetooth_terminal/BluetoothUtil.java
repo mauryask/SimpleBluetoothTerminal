@@ -15,6 +15,8 @@ import androidx.fragment.app.Fragment;
 
 public class BluetoothUtil {
 
+    //TODO: Interesting concept learn about the functional interfaces
+    @FunctionalInterface
     interface PermissionGrantedCallback {
         void call();
     }
@@ -24,15 +26,15 @@ public class BluetoothUtil {
      */
     @SuppressLint("MissingPermission")
     static int compareTo(BluetoothDevice a, BluetoothDevice b) {
-        boolean aValid = a.getName()!=null && !a.getName().isEmpty();
-        boolean bValid = b.getName()!=null && !b.getName().isEmpty();
-        if(aValid && bValid) {
+        boolean aValid = a.getName() != null && !a.getName().isEmpty();
+        boolean bValid = b.getName() != null && !b.getName().isEmpty();
+        if (aValid && bValid) {
             int ret = a.getName().compareTo(b.getName());
             if (ret != 0) return ret;
             return a.getAddress().compareTo(b.getAddress());
         }
-        if(aValid) return -1;
-        if(bValid) return +1;
+        if (aValid) return -1;
+        if (bValid) return +1;
         return a.getAddress().compareTo(b.getAddress());
     }
 
@@ -61,15 +63,15 @@ public class BluetoothUtil {
     }
 
     static boolean hasPermissions(Fragment fragment, ActivityResultLauncher<String> requestPermissionLauncher) {
-        if(Build.VERSION.SDK_INT < Build.VERSION_CODES.S)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S)
             return true;
-        boolean missingPermissions = fragment.getActivity().checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED;
+        boolean missingPermissions = fragment.requireActivity().checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED;
         boolean showRationale = fragment.shouldShowRequestPermissionRationale(Manifest.permission.BLUETOOTH_CONNECT);
 
-        if(missingPermissions) {
+        if (missingPermissions) {
             if (showRationale) {
                 showRationaleDialog(fragment, (dialog, which) ->
-                requestPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT));
+                        requestPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT));
             } else {
                 requestPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT);
             }
@@ -80,16 +82,15 @@ public class BluetoothUtil {
     }
 
     static void onPermissionsResult(Fragment fragment, boolean granted, PermissionGrantedCallback cb) {
-        if(Build.VERSION.SDK_INT < Build.VERSION_CODES.S)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S)
             return;
         boolean showRationale = fragment.shouldShowRequestPermissionRationale(Manifest.permission.BLUETOOTH_CONNECT);
         if (granted) {
-            cb.call();
+            cb.call(); //refresh() method will be called in the calling class
         } else if (showRationale) {
             showRationaleDialog(fragment, (dialog, which) -> cb.call());
         } else {
             showSettingsDialog(fragment);
         }
     }
-
 }
