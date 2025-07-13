@@ -22,6 +22,9 @@ android {
         }
     }
     namespace 'de.kai_morich.simple_bluetooth_terminal'
+    buildFeatures {
+        buildConfig true
+    }
 }
 
 dependencies {

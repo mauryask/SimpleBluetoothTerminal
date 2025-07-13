@@ -17,6 +17,7 @@ import android.text.Spannable;
 import android.text.SpannableStringBuilder;
 import android.text.method.ScrollingMovementMethod;
 import android.text.style.ForegroundColorSpan;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -29,11 +30,17 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 
 import java.util.ArrayDeque;
-import java.util.Arrays;
+
+import de.kai_morich.simple_bluetooth_terminal.cmdmanager.ShellController;
+import de.kai_morich.simple_bluetooth_terminal.logmanager.LogWriter;
+
 
 public class TerminalFragment extends Fragment implements ServiceConnection, SerialListener {
+    private static final String TAG = "!@# - TerminalFragment";
 
     private enum Connected {False, Pending, True}
 
@@ -49,6 +56,15 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     private boolean hexEnabled = false;
     private boolean pendingNewline = false;
     private String newline = TextUtil.newline_crlf;
+    SerialLogObserver shellController, logWriter;
+
+    private final ActivityResultLauncher<String> requestPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+                if (isGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && service != null && !service.areNotificationsEnabled()) {
+                    // Permission is granted. Continue the action or workflow in your app.
+                    showNotificationSettings();
+                }
+            });
 
     /*
      * Lifecycle
@@ -57,6 +73,8 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setHasOptionsMenu(true);
+        logWriter = new LogWriter();
+        shellController = new ShellController();
         deviceAddress = requireArguments().getString("device");
     }
 
@@ -132,7 +150,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_terminal, container, false);
         receiveText = view.findViewById(R.id.receive_text);                          // TextView performance decreases with number of spans
-        receiveText.setTextColor(getResources().getColor(R.color.colorRecieveText)); // set as default color to reduce number of spans
+        receiveText.setTextColor(getResources().getColor(R.color.colorReceiveText)); // set as default color to reduce number of spans
         receiveText.setMovementMethod(ScrollingMovementMethod.getInstance());
 
         sendText = view.findViewById(R.id.send_text);
@@ -140,7 +158,8 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         hexWatcher.enable(hexEnabled);
         sendText.addTextChangedListener(hexWatcher);
         sendText.setHint(hexEnabled ? "HEX mode" : "");
-
+        sendText.setHint(getString(R.string.cmd_hint));
+        sendText.setHintTextColor(getResources().getColor(R.color.colorHintText));
         View sendBtn = view.findViewById(R.id.send_btn);
         sendBtn.setOnClickListener(v -> {
             send(sendText.getText().toString().trim());
@@ -192,7 +211,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         } else if (id == R.id.backgroundNotification) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 if (!service.areNotificationsEnabled() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 0);
+                    requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
                 } else {
                     showNotificationSettings();
                 }
@@ -258,7 +277,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                 spn.append(TextUtil.toHexString(data)).append('\n');
             } else {
                 String msg = new String(data);
-                if (newline.equals(TextUtil.newline_crlf) && msg.length() > 0) {
+                if (newline.equals(TextUtil.newline_crlf) && !msg.isEmpty()) {
                     // don't show CR as ^M if directly before LF
                     msg = msg.replace(TextUtil.newline_crlf, TextUtil.newline_lf);
                     // special handling if CR and LF come in separate fragments
@@ -273,10 +292,12 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
                     }
                     pendingNewline = msg.charAt(msg.length() - 1) == '\r';
                 }
-                spn.append(TextUtil.toCaretString(msg, newline.length() != 0));
+                spn.append(TextUtil.toCaretString(msg, !newline.isEmpty()));
             }
         }
         receiveText.append(spn);
+        logWriter.receiveLogs(spn.toString());
+        shellController.receiveLogs(spn.toString());
     }
 
     private void status(String str) {
@@ -296,13 +317,6 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
         startActivity(intent);
     }
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        if (Arrays.equals(permissions, new String[]{Manifest.permission.POST_NOTIFICATIONS}) &&
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !service.areNotificationsEnabled())
-            showNotificationSettings();
-    }
-
     /*
      * SerialListener
      */
@@ -320,6 +334,7 @@ public class TerminalFragment extends Fragment implements ServiceConnection, Ser
 
     @Override
     public void onSerialRead(byte[] data) {
+        Log.d(TAG, "onSerialRead(): " + data);
         ArrayDeque<byte[]> datas = new ArrayDeque<>();
         datas.add(data);
         receive(datas);
